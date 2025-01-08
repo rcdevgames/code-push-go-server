@@ -1,48 +1,100 @@
 package config
 
 import (
-	"encoding/json"
+	"log"
 	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
+	"strconv"
+
+	"github.com/joho/godotenv"
 )
 
 var configFile *appConfig
 
-func getExcPath() string {
-	file, _ := exec.LookPath(os.Args[0])
-	// 获取包含可执行文件名称的路径
-	path, _ := filepath.Abs(file)
-	// 获取可执行文件所在目录
-	index := strings.LastIndex(path, string(os.PathSeparator))
-	ret := path[:index]
-	return strings.Replace(ret, "\\", "/", -1)
+func init() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatalf("Error loading .env file")
+	}
 }
 
 func GetConfig() appConfig {
 	if configFile != nil {
 		return *configFile
 	}
-	path := getExcPath()
-	var mode modeConfig = readJson[modeConfig](path + "/config/app.json")
 
-	appConfig := readJson[appConfig](path + "/config/app." + mode.Mode + ".json")
+	appConfig := appConfig{
+		DBUser: dbConfig{
+			Write: dbConfigObj{
+				UserName: os.Getenv("DB_USER_USERNAME"),
+				Password: os.Getenv("DB_USER_PASSWORD"),
+				Host:     os.Getenv("DB_USER_HOST"),
+				Port:     parseUint(os.Getenv("DB_USER_PORT")),
+				DBname:   os.Getenv("DB_USER_DBNAME"),
+			},
+			MaxIdleConns:    parseUint(os.Getenv("DB_USER_MAXIDLECONNS")),
+			MaxOpenConns:    parseUint(os.Getenv("DB_USER_MAXOPENCONNS")),
+			ConnMaxLifetime: parseUint(os.Getenv("DB_USER_CONNMAXLIFETIME")),
+		},
+		Redis: redisConfig{
+			Host:     os.Getenv("REDIS_HOST"),
+			Port:     parseUint(os.Getenv("REDIS_PORT")),
+			DBIndex:  parseUint(os.Getenv("REDIS_DBINDEX")),
+			UserName: os.Getenv("REDIS_USERNAME"),
+			Password: os.Getenv("REDIS_PASSWORD"),
+		},
+		CodePush: codePush{
+			FileLocal: os.Getenv("CODEPUSH_FILELOCAL"),
+			Local: localConfig{
+				SavePath: os.Getenv("CODEPUSH_LOCAL_SAVEPATH"),
+			},
+			Aws: awsConfig{
+				Endpoint:         os.Getenv("CODEPUSH_AWS_ENDPOINT"),
+				Region:           os.Getenv("CODEPUSH_AWS_REGION"),
+				S3ForcePathStyle: parseBool(os.Getenv("CODEPUSH_AWS_S3FORCEPATHSTYLE")),
+				KeyId:            os.Getenv("CODEPUSH_AWS_KEYID"),
+				Secret:           os.Getenv("CODEPUSH_AWS_SECRET"),
+				Bucket:           os.Getenv("CODEPUSH_AWS_BUCKET"),
+			},
+			Ftp: ftpConfig{
+				ServerUrl: os.Getenv("CODEPUSH_FTP_SERVERURL"),
+				UserName:  os.Getenv("CODEPUSH_FTP_USERNAME"),
+				Password:  os.Getenv("CODEPUSH_FTP_PASSWORD"),
+			},
+		},
+		UrlPrefix:       os.Getenv("URL_PREFIX"),
+		Port:            os.Getenv("PORT"),
+		ResourceUrl:     os.Getenv("RESOURCE_URL"),
+		TokenExpireTime: parseInt64(os.Getenv("TOKEN_EXPIRE_TIME")),
+	}
 	configFile = &appConfig
 	return *configFile
 }
 
-func readJson[T any](path string) T {
-	file, err := os.Open(path)
+// Fungsi untuk parsing string ke uint
+func parseUint(s string) uint {
+	value, err := strconv.ParseUint(s, 10, 32)
 	if err != nil {
-		panic(path + " config not found")
+		log.Fatalf("Error parsing uint: %v", err)
 	}
-	defer file.Close()
-	decoder := json.NewDecoder(file)
+	return uint(value)
+}
 
-	var jsonF T
-	decoder.Decode(&jsonF)
-	return jsonF
+// Fungsi untuk parsing string ke bool
+func parseBool(s string) bool {
+	value, err := strconv.ParseBool(s)
+	if err != nil {
+		log.Fatalf("Error parsing bool: %v", err)
+	}
+	return value
+}
+
+// Fungsi untuk parsing string ke int64
+func parseInt64(s string) int64 {
+	value, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		log.Fatalf("Error parsing int64: %v", err)
+	}
+	return value
 }
 
 type modeConfig struct {
